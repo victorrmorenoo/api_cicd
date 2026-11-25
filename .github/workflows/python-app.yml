@@ -2,9 +2,9 @@ name: Python application
 
 on:
   push:
-    branches: [ "develop" ]
+    branches: [ "develop", "main" ]
   pull_request:
-    branches: [ "develop" ]
+    branches: [ "develop", "main" ]
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        pip install flake8 pytest httpx
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
@@ -30,8 +30,11 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Test with pytest
+      run: python -m pytest -q
   Imagem:
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
@@ -44,9 +47,10 @@ jobs:
         uses: docker/build-push-action@v7.4.0
         with:
           push: true
-          tags: victoormorenoo/fastapi-app:latest
-  deploy:
+          tags: victoormorenoo/fastapi-app:${{ github.sha }}
+  Deploy_Homologacao:
     needs: Imagem
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
 
     steps:
@@ -57,9 +61,34 @@ jobs:
           username: ubuntu
           key: ${{secrets.CHAVE}}
           script: | 
+              set -e
               echo "Acesso liberado"
-              sudo docker pull victoormorenoo/fastapi-app:latest
+              sudo docker pull victoormorenoo/fastapi-app:${{ github.sha }}
               sudo docker rm -f fastapi-app 2>/dev/null || true
 
               # Instalar nova versão
-              sudo docker run --name fastapi-app -d -p 8080:8080 victoormorenoo/fastapi-app:latest
+              sudo docker run --name fastapi-app -d -p 8080:8080 victoormorenoo/fastapi-app:${{ github.sha }}
+  Deploy_Producao:
+    needs: Imagem
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: producao
+
+    steps:
+      - name: Deploy na EC2 de producao
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            sudo docker pull victoormorenoo/fastapi-app:${{ github.sha }}
+            sudo docker rm -f fastapi-app 2>/dev/null || true
+
+            sudo docker run --name fastapi-app -d \
+              --restart unless-stopped \
+              -p 80:8080 \
+              victoormorenoo/fastapi-app:${{ github.sha }}
