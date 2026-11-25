@@ -59,8 +59,7 @@ jobs:
           script: | 
               echo "Acesso liberado"
               sudo docker pull victoormorenoo/fastapi-app:latest
-              sudo docker stop fastapi-app 2>/dev/null || true
-              sudo rm fastapi-app 2>/dev/null || true
+              sudo docker rm -f fastapi-app 2>/dev/null || true
 
               # Instalar nova versão
-              sudo docker run --name fastapi-app -d -p 80:80 victoormorenoo/fastapi-app:latest
+              sudo docker run --name fastapi-app -d -p 8080:8080 victoormorenoo/fastapi-app:latest
