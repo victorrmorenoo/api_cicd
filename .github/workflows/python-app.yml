@@ -45,3 +45,22 @@ jobs:
         with:
           push: true
           tags: victoormorenoo/fastapi-app:latest
+  deploy:
+    needs: Imagem
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 44.208.230.33
+          username: ubuntu
+          key: ${{secrets.CHAVE}}
+          script: | 
+              echo "Acesso liberado"
+              sudo docker pull victoormorenoo/fastapi-app:latest
+              sudo docker stop fastapi-app 2>/dev/null || true
+              sudo rm fastapi-app 2>/dev/null || true
+
+              # Instalar nova versão
+              sudo docker run --name fastapi-app -d -p 80:80 victoormorenoo/fastapi-app:latest
